@@ -1,0 +1,251 @@
+
+<html>
+    <head>
+      <title>Blockchain Game</title>
+  
+        <script src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js"></script>
+        <script src="https://npmcdn.com/moralis@0.0.6/dist/moralis.js"></script>
+        <script src="//cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+    </head>
+  
+    <body>
+  
+      <button id="btn-login">Moralis Login</button>
+      <button id="btn-logout">Logout</button>
+      <br><br>
+
+      <script>
+        // connect to Moralis server
+        Moralis.initialize("1M78ps9gwpEy2seLpaqzmHSyQoffw9ZyeF4AGqqs");
+        Moralis.serverURL = "https://h41iwxe9cvrj.bigmoralis.com:2053/server";
+
+var config = {
+    type: Phaser.AUTO,
+    width: 800,
+    height: 600,
+    physics: {
+            default: 'arcade',
+            arcade: {
+            gravity: { y: 400 },
+            debug: false
+        }
+    },
+    scene: {
+        preload: preload,
+        create: create,
+        update: update,
+    }
+};
+
+var game;
+
+var platforms; 
+var Crystal;
+
+
+
+var player;
+var competitors = {};
+
+var cursor;
+
+var jumpHeight = -400;
+var that;
+
+function launch(){
+        let user = Moralis.User.current();
+        if (!user) {
+          console.log("PLEASE LOG IN WITH METAMASK!!")
+        }
+        else{
+          console.log(user.get("ethAddress") + " " + "logged in")
+          game = new Phaser.Game(config);
+        }
+
+      }
+
+      launch();
+
+
+
+
+
+// LOADING ASSETS EX. PICS
+async function preload ()
+      {
+        that = this;
+        this.load.image('background', 'BG.png');
+        this.load.image('ground', 'assets/Tiles/2.png');
+        this.load.image('comptetitor', 'player.png');
+        this.load.image('Crystal', 'assets/Object/Crystal.png');
+        this.load.image('bomb', 'assets/Object/IceBox.png');
+        this.load.image('bottom', 'assets/Tiles/platform.png');
+    
+
+
+        // fetch player SVG
+        const numericTraits = [1, 5, 99, 29, 1, 1]; // UI to change the traits
+        const equippedWearables = [23,8,4,43,0,4,0,1,7,7,7,3,7,7,0,0]
+        const rawSVG = await Moralis.Cloud.run("getSVG",{numericTraits:numericTraits,equippedWearables:equippedWearables})
+        
+        const svgBlob = new Blob([rawSVG], {type:"image/svg+xml;charset=utf-8"})
+        const url = URL.createObjectURL(svgBlob)
+        
+        this.load.image('player',url);
+
+        this.load.on('filecomplete', function(){
+
+          initPlayer()
+        }, this);
+
+        this.load.start()
+      }
+
+      async function initPlayer(){
+        player = that.physics.add.sprite(500, 250, 'player').setScale(0.55).refreshBody();
+        player.setBounce(0.3);
+        that.physics.add.collider(player, platforms);
+      }
+
+      // initial setup
+      async function create ()
+      {
+        this.add.image(400, 300, 'background').setScale(0.69);
+
+        platforms = this.physics.add.staticGroup();
+
+        platforms.create(145, 400, 'ground').setScale(0.5).refreshBody();
+        platforms.create(210, 400, 'ground').setScale(0.5).refreshBody();
+        platforms.create(275, 400, 'ground').setScale(0.5).refreshBody();
+        platforms.create(340, 400, 'ground').setScale(0.5).refreshBody();
+        platforms.create(405, 400, 'ground').setScale(0.5).refreshBody();
+        platforms.create(470, 400, 'ground').setScale(0.5).refreshBody();
+        platforms.create(535, 400, 'ground').setScale(0.5).refreshBody();
+        platforms.create(600, 400, 'ground').setScale(0.5).refreshBody();
+        platforms.create(665, 400, 'ground').setScale(0.5).refreshBody();
+        platforms.create(50, 220, 'ground').setScale(0.5).refreshBody();
+        platforms.create(750, 220, 'ground').setScale(0.5).refreshBody();
+
+
+        this.add.image(400, 300, 'Crystal').setScale(0.69);
+
+        platforms.create(750, 220, 'Crystal') .setScale(0.5).refreshBody();
+        platforms.create(145, 400, 'Crystal').setScale(0.5).refreshBody();
+        platforms.create(210, 400, 'Crystal').setScale(0.5).refreshBody();
+        platforms.create(275, 400, 'Crystal').setScale(0.5).refreshBody();
+        platforms.create(340, 400, 'Crystal').setScale(0.5).refreshBody();
+        platforms.create(405, 400, 'Crystal').setScale(0.5).refreshBody();
+        platforms.create(470, 400, 'Crystal').setScale(0.5).refreshBody();
+        platforms.create(535, 400, 'Crystal').setScale(0.5).refreshBody();
+        platforms.create(600, 400, 'Crystal').setScale(0.5).refreshBody();
+        platforms.create(665, 400, 'Crystal').setScale(0.5).refreshBody();
+        platforms.create(50, 220, 'Crystal').setScale(0.5).refreshBody();
+        platforms.create(750, 220, 'Crystal').setScale(0.5).refreshBody()
+        
+      
+        this.add.image(400, 568, 'ground').setScale(1).refreshBody();
+       
+        cursors = this.input.keyboard.createCursorKeys();
+
+    
+      
+
+
+        let user = Moralis.User.current();
+        let query = new Moralis.Query('PlayerPosition');
+        let subscription = await query.subscribe();
+        subscription.on('create', (plocation) => {
+          if(plocation.get("player") != user.get("ethAddress")){
+          
+
+            // if first time seeing
+            if(competitors[plocation.get("player")] == undefined){
+              // create a sprite
+              competitors[plocation.get("player")] = this.add.image( plocation.get("x"), plocation.get("y"), 'comptetitor').setScale(0.3);
+            }
+            else{
+              competitors[plocation.get("player")].x = plocation.get("x");
+              competitors[plocation.get("player")].y = plocation.get("y");
+            }
+
+            console.log("someone moved!")
+            console.log(plocation.get("player"))
+            console.log("new X ", plocation.get("x"))
+            console.log("new Y ", plocation.get("y"))
+          }
+        });
+
+      }
+
+      // 60 times per second  - 60 frames per second
+      async function update ()
+      {
+        if(!player)
+          return;
+
+        // LOGIC
+        if (cursors.left.isDown)
+        {
+            player.setVelocityX(-160);
+        }
+        else if (cursors.right.isDown)
+        {
+            player.setVelocityX(160);
+        }
+        else
+        {
+            player.setVelocityX(0);
+        }
+
+        if (cursors.up.isDown && player.body.touching.down)
+        {
+            player.setVelocityY(jumpHeight);
+        }
+
+        if(player.lastX!=player.x  || player.lastY!=player.y){
+          let user = Moralis.User.current();
+          
+          const PlayerPosition = Moralis.Object.extend("PlayerPosition");
+          const playerPosition = new PlayerPosition();
+
+          playerPosition.set("player",user.get("ethAddress"));
+          playerPosition.set("x",player.x);
+          playerPosition.set("y",player.y)
+
+          player.lastX = player.x;
+          player.lastY = player.y;
+
+          await playerPosition.save();
+        }
+        
+
+      }
+
+
+      // add from here down
+      async function login() {
+        let user = Moralis.User.current();
+        if (!user) {
+          user = await Moralis.Web3.authenticate();
+          launch()
+        }
+        console.log("logged in user:", user);
+      }
+
+      async function logOut() {
+        await Moralis.User.logOut();
+        console.log("logged out");
+        location.reload();
+      }
+
+
+      document.getElementById("btn-login").onclick = login;
+      document.getElementById("btn-logout").onclick = logOut;
+
+      </script>
+  
+  
+    </body>
+  
+  
+  </html>
